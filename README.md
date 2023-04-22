@@ -1,4 +1,4 @@
-# ORCID-data, updated code for University of Arizona from FSCI2022 by Clarke Lakovakis
+# ORCID-data, updated code for getting any institution's ORCIDs and related employees 
 
 Some portion of the code is from FSCI 2022 session by Clarke Lakovakis. Major changes include
 - Debug and modify certain algorithm and workflow to ensure correct data pull. 
