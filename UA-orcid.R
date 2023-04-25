@@ -58,8 +58,8 @@ library(inops)
 # solution to 2. go to your ORCID's "Developer tools" to "Reset client secret". 
 
 # Replacing orcid_client_id and orcid_client_secret with yours. Both can be found at your ORCID's "Developer tools"  
-orcid_client_id <- "APP-56WL1F7H14FSAJT6"      # your client ID from ORCID
-orcid_client_secret <- "71811c8b-ed2c-4790-8757-03c79fa2faaa"  # your secret from ORCID
+orcid_client_id <- " "      # your client ID from ORCID
+orcid_client_secret <- " "  # your secret from ORCID
 
 orcid_request <- POST(url  = "https://orcid.org/oauth/token",
                       config = add_headers(`Accept` = "application/json",
