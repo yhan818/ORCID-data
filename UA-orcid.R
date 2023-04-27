@@ -1,7 +1,7 @@
 ###### Retrieving institutional ORCIDs and related employee data from ORCID public API #######
 #### Author: Yan Han 
-#### Updated: 2023-04-20
-#### Version: 0.10
+#### Updated: 2023-04-26
+#### Version: 0.20
 #### Note: Some portion of the code is based on FSCI 2022 ession by Clarke Lakovakis.
 
 # Install and load packages -----------------------------------------------
@@ -47,6 +47,8 @@ library(rcrossref)
 library(roadoi)
 library(inops)
 
+library(testthat)
+
 # Set up orcid 
 # https://www.orcid.org in the Your Website URL field, “Getting public API key” in Description field 
 # Registering under "Developer tools" is required to getting public API. Read the next 2 tutorials is highly recommend to avoid authentication "401" errors
@@ -58,8 +60,8 @@ library(inops)
 # solution to 2. go to your ORCID's "Developer tools" to "Reset client secret". 
 
 # Replacing orcid_client_id and orcid_client_secret with yours. Both can be found at your ORCID's "Developer tools"  
-orcid_client_id <- "APP-56WL1F7H14FSAJT6"      # your client ID from ORCID
-orcid_client_secret <- "71811c8b-ed2c-4790-8757-03c79fa2faaa"  # your secret from ORCID
+orcid_client_id <- "APP-"      # your client ID from ORCID
+orcid_client_secret <- ""  # your secret from ORCID
 
 orcid_request <- POST(url  = "https://orcid.org/oauth/token",
                       config = add_headers(`Accept` = "application/json",
@@ -87,20 +89,20 @@ rorcid::orcid_auth()
 
 
 #####################################
-# Testing data. Change to 
-testing_family_name <- 'carberry'
-testing_email = 'yhan@email.arizona.edu'
-testing_orcid= "0000-0001-9518-2684"  # not sure why he was not included at late. 
+# Testing data 
+testing_family_name1 <- 'carberry'
+testing_email1 = 'yhan@email.arizona.edu'
 
+testing_orcid1= "0000-0001-9518-2684"  # not sure why he was not included at later stage.
 testing_orcid2="0000-0003-4558-9712"  # not sure why she was not included
 
 ### testing: You shall see a tibble 10x3: Josiah Carberry to Benjamin Carberry
-testing1 <- rorcid::orcid_search(family_name = testing_family_name)
+testing1 <- rorcid::orcid_search(family_name = testing_family_name1)
 testing1
 
 # Testing how quick public records get updated. I made it public and it took <= 1 hr 
 # You shall see a tibble 1x3 with yhan ORCID: 0000-0001-9518-2684
-testing2 <- rorcid::orcid_search(email = testing_email)
+testing2 <- rorcid::orcid_search(email = testing_email1)
 testing2
 
 # see ORCID fields
@@ -122,6 +124,7 @@ ror_id  <- "https://ror.org/03m2x1q45"
 # Query with institution's RINGGOLD, GRID, ROR IDs, organization_name, email. 
 # Per ORCID, "Employment" and "Education" data are coded with organization identifiers as RINGGOLD
 # Query string: ringgold-org-id:8041 OR grid-org-id:grid.134563.6 OR ror-org-id:"https://ror.org/03m2x1q45" OR affiliation-org-name:"University of Arizona" OR email:*@arizona.edu OR email:*@email.arizona.edu
+# The following results were performed on 2023-04-25. Your numbers may vary (usually larger)
 # --results: 7,733
 # Query string: ringgold-org-id:8041 OR grid-org-id:grid.134563.6 OR ror-org-id:"https://ror.org/03m2x1q45" OR email:*@arizona.edu
 # -- results:  5,746
@@ -146,7 +149,6 @@ institution_query <- glue('ringgold-org-id:', ringgold_id,
                           ' OR email:*', email_domain,
                           ' OR email:*', email_domain2,
                       )
-
 institution_query 
 
 ##### Use the most accurate query string: You can construct different query to fit your search goals. 
@@ -159,7 +161,7 @@ institution_query
 orcids_count <- base::attr(rorcid::orcid(query = institution_query), "found")
 
 # create the page vector
-results_pages <- seq(from = 0, to = orcids_count, by = 200)
+results_pages <- seq(from = 0, to = orcids_count, by = 400)
 
 # get the ORCID iDs
 org_orcids <- purrr::map(
@@ -167,33 +169,52 @@ org_orcids <- purrr::map(
   function(page) {
     print(page)
     org_orcids <- rorcid::orcid(query = institution_query,
-                               rows = 200,
+                               rows = 400,
                                start = page)
     return(org_orcids)
   })
 
-### 2023-04-18: 7698 obs. 3 variables
-### 2023-04-13: 7683 obs. 3 variables (orcid_identifier_uri, orcid_identifier_path, orcid_identifier_host)
-### 2023-03-22: 7634 results. 
-##### To verify if a user exist. use "curl -iL -H 'Accept: application/xml' https://orcid.org/0000-0000-0000-0000" 
-##### Yan Han ORCID https://orcid.org/0000-0001-9518-2684
 # Map the ORCID iDs into a single tibble
 org_orcids_data <- org_orcids %>%
   map_dfr(., as_tibble) %>%    # map_dfr r for rows, map_dfc() for c for columns
   janitor::clean_names()
 
+# Testing if testing data are in the ORCID data
+testing_func1 <- function(orcid, y) {
+  orcid %in% y
+}
+
+testing_func(org_orcids_data$orcid_identifier_path)
+
+test_that("testing_func1 returns TRUE", {
+  output <- testing_func1(testing_orcid1, org_orcids_data$orcid_identifier_path)
+  expect_equal(output, TRUE)
+}) 
+test_that("testing_func1 returns TRUE", {
+  output <- testing_func1(testing_orcid2, org_orcids_data$orcid_identifier_path)
+  expect_equal(output, TRUE)
+}) 
+
+
 getwd()
 setwd("/home/yhan/Documents/UA-data/ORCID-data")
 currentDate <-Sys.Date()
-csvFileName <-paste("org_orcids_data_",currentDate ,".csv", sep="")
-write_csv(org_orcids_data, csvFileName) 
+orcids_csv_filename <-paste("org_orcids_data_",currentDate ,".csv", sep="")
+write_csv(org_orcids_data, orcids_csv_filename) 
+
+# find out the difference of two ORCID CSV files created in a different date
+orcids_csv1 <-read.csv("org_orcids_data_2023-04-24.csv")
+orcids_csv2 <-read.csv("org_orcids_data_2023-04-26.csv")
+new_orcid_diff <-anti_join(orcids_csv2, orcids_csv1, by ="orcid_identifier_path")
+new_orcid_diff
 
 #############################################################
 # get employment data -----------------------------------------------------
 
 # If testing, using the first 100 records [1:100] 
 # measure the time of first 100 records. about 13 seconds to complete
-system.time( org_employment <- rorcid::orcid_employments(org_orcids_data$orcid_identifier_path[1:100]) )
+# Here, you can replace rorcid::orcid_employments to other functions to retrieve info. see https://cran.r-project.org/web/packages/rorcid/rorcid.pdf
+system.time( org_employment <- rorcid::orcid_employments(org_orcids_data$orcid_identifier_path) )
 
 # Be Patient: 2023-04-18: 7698 obs. It should be 77x of 100 time of records. Real running time: 1,473 seconds
 #system.time ( ua_employment <- rorcid::orcid_employments(ua_orcids_data$orcid_identifier_path) )
@@ -201,10 +222,11 @@ system.time( org_employment <- rorcid::orcid_employments(org_orcids_data$orcid_i
 View(org_employment)
 
 getwd()
-write_json(org_employment, "org_employment.json")
+org_employment_json_filename <- paste("org_employment_",currentDate, ".json", sep="")
+write_json(org_employment, org_employment_json_filename)
 
 # Read it back in
-# org_employment <- read_json("org_employment.json", simplifyVector = TRUE)
+# org_employment <- read_json("org_employment_<date>.json", simplifyVector = TRUE)
 
 # extract the employment data "affiliation-group: summaries" and mutate the dates using anytime package
 # see ua_employment data for its structure. 
@@ -216,13 +238,24 @@ org_employment_data <- org_employment %>%
                 employment_summary_created_date_value = anytime::anydate(employment_summary_created_date_value/1000),
                 employment_summary_last_modified_date_value = anytime::anydate(employment_summary_last_modified_date_value/1000))
 
+# clean up the column names
+# names(org_employment_data) <- names(org_employment_data) %>%
+#    stringr::str_replace(., "employment_summary_", "") %>%
+#    stringr::str_replace(., "source_source_", "") %>%
+#    stringr::str_replace(., "organization_disambiguated_", "")
+
 View(org_employment_data)
 
-# clean up the column names
-names(org_employment_data) <- names(org_employment_data) %>%
-  stringr::str_replace(., "employment_summary_", "") %>%
-  stringr::str_replace(., "source_source_", "") %>%
-  stringr::str_replace(., "organization_disambiguated_", "")
+#### Testing again 
+test_that("testing_orcid returns TRUE", {
+  output <- testing_func1(testing_orcid1, org_employment_data$orcid_path)
+  expect_equal(output, TRUE)
+}) 
+test_that("testing_orcid returns TRUE", {
+  output <- testing_func1(testing_orcid2, org_employment_data$orcid_path)
+  expect_equal(output, TRUE)
+}) 
+
 
 # view the unique institutions in the organization names columns
 # keep in mind this will include all institutions a person has in employments section, NOT just U. of Arizona
@@ -241,28 +274,36 @@ str_pattern <- "(?i).*University of Arizona.*"
 orgs_filtered <- organizations %>%
   filter(str_detect(organization_name, str_pattern) ) 
 
-# If you have unit within the institution. You can filter again to employees specifically stated that specific unit(s) containing keyword: library, libraries
+# If you have units within the institution. You can filter again to employees specifically stated that specific unit(s) containing keyword: library, libraries
 # Note: This filter removes people who do not state "library or libraries", but entered "University of Arizona". 
 
 str_pattern2 <- "(?i).*Librar.*"
 orgs_sub_filtered <- orgs_filtered %>%
   filter(str_detect(organization_name, str_pattern2) )   
 
-# filter the dataset to include only the institutions you want. 
+# filter the dataset to include only the institutions you wanted based on the column's name "employment_summary_organization_name".
 # There may be different variants depending on if the person hand-entered the data. 
 # Check the ua_units_filtered, one person can have multiple employment records in different years.
 # 2023-04-20: 2,828 obs. 
 
-ua_employment_data_filtered <- org_employment_data %>% dplyr::filter(organization_name %in% orgs_filtered$organization_name[c(1)])
+########################################################3
+colnames(org_employment_data)
+
+# ua_employment_data_filtered <- org_employment_data %>% dplyr::filter(organization_name %in% orgs_filtered$organization_name[c(1)])
+
+# 2023-04-26: 3,965 obs.
+org_employment_data_filtered <- org_employment_data %>% filter (grepl(organization_name, employment_summary_organization_name))
 
 # filter to include only people who have NA as the end date: current employee
 # It filters current employee who has previous employee in different rank end_date_year_value (e.g. 2019). 
-# 2023-04-20: 1,546 obs.
-ua_employment_data_filtered_current <- ua_employment_data_filtered %>%
-  dplyr::filter(is.na(end_date_year_value))
+# 2023-04-20: 1,546 obs with Clarke's code. 
+# 2023-04-26: 2,193 obs with my code
+org_employment_data_filtered_current <- org_employment_data_filtered %>% dplyr::filter(is.na(employment_summary_end_date_year_value))
+
+#org_employment_data_filtered_current <- org_employment_data_filtered %>%dplyr::filter(is.na(end_date_year_value))
 
 # sub unit of the organization
-ua_sub_employment_data_filtered <- ua_employment_data_filtered_current %>%
+org_sub_employment_data_filtered <- org_employment_data_filtered_current %>%
   dplyr::filter(organization_name %in% orgs_sub_filtered$organization_name[c(1)])
 
 
@@ -278,7 +319,13 @@ ua_sub_employment_data_filtered <- ua_employment_data_filtered_current %>%
 # The orcid_path value corresponds to the path of the person who added the employment record (which is usually, but not always the same)
 # Therefore you have to strip out the ORCID iD from the 'path' variable first and put it in it's own value and use it
 # 7,146 obs.
-ua_current_employment_all <- ua_employment_data_filtered_current %>%
+
+names(org_employment_data_filtered_current) <- names(org_employment_data_filtered_current) %>%
+    stringr::str_replace(., "employment_summary_", "") %>%
+    stringr::str_replace(., "source_source_", "") %>%
+    stringr::str_replace(., "organization_disambiguated_", "")
+
+org_current_employment_all <- org_employment_data_filtered_current %>%
   mutate(orcid_identifier = str_sub(path, 2, 20)) %>%
   select(any_of(c("orcid_identifier",
                   "organization_name",
@@ -301,47 +348,44 @@ ua_current_employment_all <- ua_employment_data_filtered_current %>%
                   "end_date_month_value",
                   "end_date_day_value")))
 
-# Testing a specific ORCID existing 
-is.data.frame(ua_current_employment_all)
-testing_orcid_row <- ua_current_employment_all[ua_current_employment_all$orcid_identifier == testing_orcid, ]
-testing_orcid_row
+################### Testing again with Org_current_employment
+test_that("testing_func1 returns TRUE", {
+  output <- testing_func1(testing_orcid1, org_current_employment_all$orcid_identifier)
+  expect_equal(output, TRUE)
+}) 
+test_that("testing_func2 returns TRUE", {
+  output <- testing_func1(testing_orcid2, org_current_employment_all$orcid_identifier)
+  expect_equal(output, TRUE)
+}) 
 
 
-ua_unique_orcids <-ua_current_employment_all$orcid_identifier 
+org_unique_orcids <-org_current_employment_all$orcid_identifier 
 
-# find the indices of the duplicated values
-dupes <- ua_current_employment_all$orcid_identifier[duplicated(ua_current_employment_all$orcid_identifier)]
+# find the duplicated values
+dupes <- org_current_employment_all$orcid_identifier[duplicated(org_current_employment_all$orcid_identifier)]
 cat("Duplicate values in orcid_identifier:" , paste(dupes)) 
 
-# 973 dupes for 7710 records
-# 726 dupes for 5,781 records
-sum(duplicated(ua_current_employment_all$orcid_identifier))
+sum(duplicated(org_current_employment_all$orcid_identifier))
 
+##################################### Accurate So far #################
 
 # create a new vector unique_orcids that includes only unique ORCID iDs from the filtered 
 # Bug?: cannot perform unique(), because someone (like yhan) may have multiple employment records with this dataframe. 
 # If unique() them, it may select the first one with end date value is not "null". This will be eliminated when filtering out. 
-# In UA case, applying unique() reduce 7146 to 6,173
-unique_orcids <-  unique(ua_current_employment_all$orcid_identifier) %>% na.omit(.) %>% as.character()
+org_unique_orcids <-  unique(org_current_employment_all$orcid_identifier) %>% na.omit(.) %>% as.character()
 
 # find out the duplicated ORCIDs
-duplicated_orcids <- duplicated(ua_current_employment_all$orcid_identifier) | duplicated(ua_current_employment_all$orcid_identifier, fromLast = TRUE)
-ua_current_employment_all$orcid_identifier[duplicated_orcids]
+duplicated_orcids <- duplicated(org_current_employment_all$orcid_identifier) | duplicated(org_current_employment_all$orcid_identifier, fromLast = TRUE)
+org_current_employment_all$orcid_identifier[duplicated_orcids]
 
-# Testing
-which (unique_orcids==testing_orcid )
-which (ua_unique_orcids == testing_orcid)
 
 # Get all the information from those ORCID. syntax orcid_person(orcid, details = FALSE).
 # This processed 10 records/sec. So it may take longer time. ~120 seconds for the dataset. 1,475 elements (list) 
-# unique_orcids 6,173 elements. took 7-10 minutes to complete
-# ua_orcid_person 6,173 obs.
 
-system.time ( ua_unique_orcid_person <- rorcid::orcid_person(ua_unique_orcids) )
+
+system.time ( org_unique_orcid_person <- rorcid::orcid_person(org_unique_orcids) )
 testing_orcid
 testing_orcid %in% ua_unique_orcid_person # ?? False
-
-# ua_orcid_person <- rorcid::orcid_person(unique_orcids)
 
 yhan_orcid <-rorcid::orcid_person("0000-0001-9518-2684")
 yhan_orcid
@@ -350,7 +394,7 @@ yhan_orcid
 # See more at https://ciakovx.github.io/rorcid.html#Getting_the_data_into_a_data_frame for this.
 
 #### using ua_unique_orcid_person
-ua_orcid_person_data2 <- ua_unique_orcid_person %>% {
+org_orcid_person_data2 <- org_unique_orcid_person %>% {
   dplyr::tibble(
     given_name = purrr::map_chr(., purrr::pluck, "name", "given-names", "value", .default=NA_character_),
     created_date = purrr::map_chr(., purrr::pluck, "name", "created-date", "value", .default=NA_integer_),
@@ -369,8 +413,8 @@ ua_orcid_person_data2 <- ua_unique_orcid_person %>% {
                 last_modified_date = anytime::anydate(as.double(last_modified_date)/1000))
 
 # Join it back with the employment records
-orcid_person_employment_join <- ua_orcid_person_data2 %>%
-  left_join(ua_current_employment_all, by = c("orcid_identifier_path" = "orcid_identifier"))
+orcid_person_employment_join <- org_orcid_person_data2 %>%
+  left_join(org_current_employment_all, by = c("orcid_identifier_path" = "orcid_identifier"))
 
 
 orcid_person_final <- orcid_person_employment_join[!duplicated(orcid_person_employment_join$orcid_identifier_path),]
