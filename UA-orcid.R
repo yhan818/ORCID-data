@@ -60,8 +60,9 @@ library(testthat)
 # solution to 2. go to your ORCID's "Developer tools" to "Reset client secret". 
 
 # Replacing orcid_client_id and orcid_client_secret with yours. Both can be found at your ORCID's "Developer tools"  
-orcid_client_id <- "APP-"      # your client ID from ORCID
-orcid_client_secret <- ""  # your secret from ORCID
+
+orcid_client_id <- " "      # your client ID from ORCID
+orcid_client_secret <- " "  # your secret from ORCID
 
 orcid_request <- POST(url  = "https://orcid.org/oauth/token",
                       config = add_headers(`Accept` = "application/json",
